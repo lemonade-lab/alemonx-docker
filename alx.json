@@ -1,0 +1,34 @@
+{
+  "id": "alemonx-docker",
+  "name": "Docker Compose 管理器",
+  "version": "0.0.1",
+  "description": "集中管理 Docker Compose 项目、镜像和容器，并检查本机 Docker 环境。",
+  "platforms": ["darwin", "linux", "windows"],
+  "runtime": "binary",
+  "entry": {
+    "darwin-arm64": "dist/alemonx-docker-darwin-arm64",
+    "darwin-amd64": "dist/alemonx-docker-darwin-amd64",
+    "linux-amd64": "dist/alemonx-docker-linux-amd64",
+    "windows-amd64": "dist/alemonx-docker-windows-amd64.exe"
+  },
+  "development": {
+    "runtime": "go",
+    "entry": {"go": "runner"},
+    "web": {
+      "mode": "dev-server",
+      "root": "web",
+      "build": {"program": "yarn", "args": ["--cwd", "frontend", "build"]},
+      "dev": {"program": "yarn", "args": ["--cwd", "frontend", "dev", "--host", "127.0.0.1", "--port", "${ALX_PLUGIN_DEV_PORT}"]},
+      "healthPath": "/",
+      "hmr": true
+    }
+  },
+  "web": {"root": "web"},
+  "statusActions": ["docker-status", "project-list", "image-list", "container-list", "docker-ports"],
+  "uploads": [{"action": "upload-compose", "maxBytes": 2097152}],
+  "systemPickers": [
+    {"id": "compose-file", "kind": "file", "title": "选择 Docker Compose 文件"},
+    {"id": "project-directory", "kind": "directory", "title": "打开 Compose 项目目录"}
+  ],
+  "navigation": {"label": "Docker", "icon": "container", "order": -100}
+}
