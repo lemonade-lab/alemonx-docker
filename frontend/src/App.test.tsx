@@ -224,18 +224,38 @@ describe('App workspaces', () => {
     })
   })
 
-  it('opens an embedded webview for a container port and applies a route', async () => {
+  it('opens a host WebView for a container port and applies a route', async () => {
     installFetchMock({ withContainer: true })
+    const webviewOpen = vi.fn(async () => ({ ok: true, id: 'w1' }))
+    const webviewClose = vi.fn(async () => ({ ok: true, closed: 1 }))
+    window.ALXHost = {
+      desktop: { open: vi.fn(async () => undefined) },
+      webview: { open: webviewOpen, close: webviewClose }
+    }
     render(<App />)
     fireEvent.click(screen.getByText('容器'))
     fireEvent.click(await screen.findByText('打开页面'))
-    const frame = await screen.findByTitle('web-1 容器页面')
-    expect(frame.getAttribute('src')).toContain('/api/v1/services/dynamic/alemonx-docker/8080/')
+    await waitFor(() => {
+      expect(webviewOpen).toHaveBeenCalledWith(
+        'alemonx-docker',
+        expect.objectContaining({
+          title: 'web-1 容器页面',
+          url: expect.stringContaining('/api/v1/services/dynamic/alemonx-docker/8080/')
+        })
+      )
+    })
     fireEvent.change(screen.getByPlaceholderText('指定路由，例如 /login'), { target: { value: '/login' } })
     fireEvent.click(screen.getByText('打开路由'))
     await waitFor(() => {
-      expect(screen.getByTitle('web-1 容器页面').getAttribute('src')).toContain('/api/v1/services/dynamic/alemonx-docker/8080/login')
+      expect(webviewClose).toHaveBeenCalledWith('alemonx-docker', 'w1')
+      expect(webviewOpen).toHaveBeenLastCalledWith(
+        'alemonx-docker',
+        expect.objectContaining({
+          url: expect.stringContaining('/api/v1/services/dynamic/alemonx-docker/8080/login')
+        })
+      )
     })
+    delete window.ALXHost
   })
 
   it('provides network and volume management workspaces', async () => {

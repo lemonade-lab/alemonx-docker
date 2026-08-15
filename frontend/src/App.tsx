@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { fetchStatus, installDocker, openDesktop, PLUGIN_ID, runActionAndPoll, runActionOnce, uploadCompose, type ActionResult } from './api'
+import { alertHost, closeHostWebview, confirmHost, fetchStatus, installDocker, openDesktop, openHostWebview, PLUGIN_ID, runActionAndPoll, runActionOnce, uploadCompose, type ActionResult } from './api'
 import { blankForm, formFor, serviceNames, writeForm, type FormFields } from './composeForm'
 
 type View = 'environment' | 'projects' | 'images' | 'containers' | 'networks' | 'volumes'
@@ -164,7 +164,10 @@ function Projects({ projects, external, recommendations, selected, busy, onOpen,
   const create = () => { if (name.trim()) onRun<Project>('project-create', { name }, result => { setName(''); onSelect(result.data); setSection('list') }) }
   const download = () => { if (name.trim() && url.trim()) onRun<Project>('project-download', { name, url }, result => { setName(''); setURL(''); onSelect(result.data); setSection('list') }) }
   const importFile = async (file: File) => {
-    if (!name.trim()) return alert('请先填写项目名称。')
+    if (!name.trim()) {
+      alertHost('无法导入 Compose', '请先填写项目名称。')
+      return
+    }
     try {
       const created = await runActionAndPoll<Project>('project-create', { name })
       if (created.error || !created.data) throw new Error(created.error || '无法创建项目')
@@ -173,7 +176,7 @@ function Projects({ projects, external, recommendations, selected, busy, onOpen,
       const result = await uploadCompose(target.data.destination, file)
       if (result.error) throw new Error(result.error)
       setName(''); onOpen(created.data.id); setSection('list')
-    } catch (reason) { alert(textError(reason)) }
+    } catch (reason) { alertHost('操作失败', textError(reason)) }
   }
   const downloadRecommendation = (item: Recommendation) => {
     const name = window.prompt('项目名称（默认使用推荐名称）', item.name)
@@ -246,28 +249,31 @@ function ProjectEditor({ project, busy, onRun, onSelect }: { project: Project; b
       const next = writeForm(content, service, fields)
       setContent(next)
       onRun<Project>('project-save', { projectID: project.id, content: next }, result => { if (result.data) onSelect(result.data) })
-    } catch (reason) { alert(textError(reason)) }
+    } catch (reason) { alertHost('操作失败', textError(reason)) }
   }
   const addService = () => {
     const next = window.prompt('服务名称')
     if (!next?.trim()) return
-    if (services.includes(next.trim())) return alert('服务已存在。')
+    if (services.includes(next.trim())) {
+      alertHost('添加服务', `服务“${next.trim()}”已存在。`)
+      return
+    }
     try {
       const nextContent = writeForm(content, next.trim(), blankForm)
       setContent(nextContent); setService(next.trim()); setFields(blankForm)
-    } catch (reason) { alert(textError(reason)) }
+    } catch (reason) { alertHost('操作失败', textError(reason)) }
   }
-  const lifecycle = (action: 'compose-up' | 'compose-stop' | 'compose-restart' | 'compose-down') => {
-    if (action === 'compose-down' && !window.confirm('关闭项目会停止并移除其容器和网络，但不会删除卷或镜像。继续吗？')) return
+  const lifecycle = async (action: 'compose-up' | 'compose-stop' | 'compose-restart' | 'compose-down') => {
+    if (action === 'compose-down' && !(await confirmHost('关闭项目', '关闭项目会停止并移除其容器和网络，但不会删除卷或镜像。继续吗？', '关闭项目', '取消'))) return
     onRun(action, { projectID: project.id })
   }
-  const openFolder = () => onRun<ImportTarget>('project-import-target', { projectID: project.id }, result => { if (result.data) void openDesktop(result.data.destination).catch(error => alert(textError(error))) })
+  const openFolder = () => onRun<ImportTarget>('project-import-target', { projectID: project.id }, result => { if (result.data) void openDesktop(result.data.destination).catch(error => alertHost('无法打开目录', textError(error))) })
   const openPS = () => onRun<ComposeServiceStatus[]>('compose-ps', { projectID: project.id }, result => setPS(result.data || []))
   const openLogs = () => onRun<unknown>('compose-logs', { projectID: project.id, lines: '200' }, result => setLogs(result.output))
   const openEnv = () => onRun<{ content: string }>('compose-env-read', { projectID: project.id }, result => setEnv({ content: result.data?.content || '', dirty: false }))
   const saveEnv = () => { if (!env) return; onRun('compose-env-write', { projectID: project.id, content: env.content }, () => setEnv({ content: env.content, dirty: false })) }
-  const removeProject = () => {
-    if (!window.confirm('删除项目“' + project.name + '”会移除受管目录中的 docker-compose.yml 与 .env，无法恢复；运行中的容器不受影响。继续吗？')) return
+  const removeProject = async () => {
+    if (!(await confirmHost('删除项目', `删除项目“${project.name}”会移除受管目录中的 docker-compose.yml 与 .env，无法恢复；运行中的容器不受影响。继续吗？`, '删除项目', '取消'))) return
     onRun('project-delete', { projectID: project.id }, () => onSelect(undefined))
   }
   return <div className="project-editor">
@@ -373,7 +379,7 @@ function Images({ images, registries, busy, onRun }: { images: DockerImage[]; re
         <h3>清理镜像</h3>
         <label className="check-row"><input type="checkbox" checked={pruneAll} onChange={event => setPruneAll(event.target.checked)} />同时清理所有未被容器使用的镜像（默认仅清理悬空镜像）</label>
         <div className="button-row"><button className="danger-button" disabled={busy} onClick={() => {
-          if (window.confirm(pruneAll ? '将删除所有未被任何容器使用的镜像，且无法恢复。继续吗？' : '将删除所有悬空镜像（不再被任何镜像引用的旧层）。继续吗？')) onRun('image-prune', pruneAll ? { all: '1' } : {})
+          void confirmHost('清理镜像', pruneAll ? '将删除所有未被任何容器使用的镜像，且无法恢复。继续吗？' : '将删除所有悬空镜像（不再被任何镜像引用的旧层）。继续吗？', '清理', '取消').then(ok => { if (ok) onRun('image-prune', pruneAll ? { all: '1' } : {}) })
         }}>清理镜像</button></div>
       </div></div>
     </SettingGroup>
@@ -389,7 +395,7 @@ function Images({ images, registries, busy, onRun }: { images: DockerImage[]; re
       <ResourceTable headers={['仓库', '凭据存储', '操作']} empty="尚未配置任何仓库凭据。">{registries.map(item => <tr key={item.registry}>
         <td><strong>{item.registry}</strong></td>
         <td>{item.externalKey ? '外部凭据存储（Docker 管理）' : 'Docker 配置中'}</td>
-        <td><div className="button-row"><button className="danger-button" disabled={busy} onClick={() => { if (window.confirm('退出登录 ' + item.registry + '？')) onRun('registry-logout', { registry: item.registry }) }}>退出登录</button></div></td>
+        <td><div className="button-row"><button className="danger-button" disabled={busy} onClick={() => void confirmHost('退出登录', `退出登录 ${item.registry}？`, '退出登录', '取消').then(ok => { if (ok) onRun('registry-logout', { registry: item.registry }) })}>退出登录</button></div></td>
       </tr>)}</ResourceTable>
     </SettingGroup>
     <SettingGroup title="本地镜像" description="当前 Docker 守护进程缓存的镜像列表。">
@@ -397,7 +403,7 @@ function Images({ images, registries, busy, onRun }: { images: DockerImage[]; re
         <td>{item.repository}</td><td>{item.tag}</td><td>{item.size}</td><td>{item.created}</td>
         <td><div className="button-row">
           <button className="text-button" disabled={busy} onClick={() => { setTagSource(item.repository + ':' + item.tag); setTagTarget('') }}>标记</button>
-          <button className="danger-button" disabled={busy} onClick={() => { if (window.confirm('删除镜像 ' + item.repository + ':' + item.tag + '？')) onRun('image-remove', { image: item.repository + ':' + item.tag }) }}>删除</button>
+          <button className="danger-button" disabled={busy} onClick={() => void confirmHost('删除镜像', `删除镜像 ${item.repository}:${item.tag}？`, '删除', '取消').then(ok => { if (ok) onRun('image-remove', { image: `${item.repository}:${item.tag}` }) })}>删除</button>
         </div></td>
       </tr>)}</ResourceTable>
     </SettingGroup>
@@ -418,15 +424,35 @@ function Containers({ containers, busy, onRun }: { containers: DockerContainer[]
   const [statsError, setStatsError] = useState<string>()
   const [web, setWeb] = useState<{ container: DockerContainer; port: PublishedPort }>()
   const [route, setRoute] = useState('')
-  const [webURL, setWebURL] = useState('')
+  const webviewID = useRef<string | null>(null)
   const logsPre = useRef<HTMLPreElement>(null)
   const statsPolling = useRef(false)
   const logsPolling = useRef(false)
   const logsTail = useRef(0)
   const toggle = (id: string) => setSelectedIDs(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
   const batch = (verb: string) => { if (selectedIDs.length) onRun('container-batch', { verb, containerIDs: selectedIDs.join(',') }, () => setSelectedIDs([])) }
-  const openWeb = (container: DockerContainer, port: PublishedPort) => { setWeb({ container, port }); setRoute(''); setWebURL(dynamicWebURL(port.hostPort, '/')) }
-  const applyRoute = () => { if (!web) return; const path = cleanRoute(route); if (!path) return alert('路由无效：不能包含 .. 或反斜杠。'); setWebURL(dynamicWebURL(web.port.hostPort, path)) }
+  const openHostWeb = (container: DockerContainer, port: PublishedPort, routePath: string) => {
+    const url = window.location.origin + dynamicWebURL(port.hostPort, routePath)
+    void closeHostWebview(webviewID.current).finally(() => {
+      void openHostWebview({ title: `${container.names} 容器页面`, url, width: 1080, height: 760 })
+        .then(id => { webviewID.current = id ?? null })
+        .catch(error => alertHost('无法打开容器页面', textError(error)))
+    })
+  }
+  const openWeb = (container: DockerContainer, port: PublishedPort) => {
+    setWeb({ container, port })
+    setRoute('')
+    openHostWeb(container, port, '/')
+  }
+  const applyRoute = () => {
+    if (!web) return
+    const path = cleanRoute(route)
+    if (!path) {
+      alertHost('路由无效', '路由不能包含 .. 或反斜杠。')
+      return
+    }
+    openHostWeb(web.container, web.port, path)
+  }
   const openDetail = (item: DockerContainer) => { setDetailTab('inspect'); setStatsLive(false); setStat(undefined); setStatsError(undefined); onRun<unknown>('container-inspect', { containerID: item.id }, result => setDetail({ id: item.id, name: item.names, data: result.data })) }
   const openLogs = (item: DockerContainer) => {
     setLogs({ id: item.id, name: item.names, lines: [], live: false })
@@ -534,21 +560,21 @@ function Containers({ containers, busy, onRun }: { containers: DockerContainer[]
         </div></td>
       </tr>)}</ResourceTable>
     </SettingGroup>
-    {web && <SettingGroup title="容器页面" description="通过宿主同源代理内嵌容器 Web UI，可指定访问路由；部分应用可能拒绝被内嵌，可改用浏览器打开。">
+    {web && <SettingGroup title="容器页面" description="在宿主 WebView 窗口中打开容器 Web UI（可拖拽、缩放、最小化），可指定访问路由；部分应用可能拒绝被内嵌，可改用浏览器打开。">
       <div className="webview-card">
         <div className="webview-head">
           <div className="webview-title"><strong className="editor-title">{web.container.names}</strong><span className="editor-subtitle">宿主端口 {web.port.hostPort} → 容器 {web.port.containerPort}/{web.port.protocol}</span></div>
           <div className="button-row">
-            {web.container.published && web.container.published.length > 1 ? <select className="route-select" value={web.port.hostPort} onChange={event => { const next = web.container.published!.find(port => String(port.hostPort) === event.target.value); if (next) { setWeb({ ...web, port: next }); setWebURL(dynamicWebURL(next.hostPort, route)) } }}>
+            {web.container.published && web.container.published.length > 1 ? <select className="route-select" value={web.port.hostPort} onChange={event => { const next = web.container.published!.find(port => String(port.hostPort) === event.target.value); if (next) { setWeb({ ...web, port: next }); openHostWeb(web.container, next, cleanRoute(route) || '/') } }}>
               {web.container.published.map(port => <option key={`${port.hostPort}-${port.protocol}`} value={port.hostPort}>{port.hostPort}（容器 {port.containerPort}/{port.protocol}）</option>)}
             </select> : null}
             <input className="route-input" value={route} placeholder="指定路由，例如 /login" onChange={event => setRoute(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') applyRoute() }} />
             <button className="secondary-button" onClick={applyRoute}>打开路由</button>
-            <button className="text-button" onClick={() => void openDesktop('http://127.0.0.1:' + web.port.hostPort + (cleanRoute(route) || '/')).catch(error => alert(textError(error)))}>浏览器打开</button>
-            <button className="text-button" onClick={() => setWeb(undefined)}>关闭</button>
+            <button className="text-button" onClick={() => void openDesktop('http://127.0.0.1:' + web.port.hostPort + (cleanRoute(route) || '/')).catch(error => alertHost('无法用浏览器打开', textError(error)))}>浏览器打开</button>
+            <button className="text-button" onClick={() => { void closeHostWebview(webviewID.current); webviewID.current = null; setWeb(undefined); setRoute('') }}>关闭</button>
           </div>
         </div>
-        <iframe className="webview-frame" src={webURL} title={`${web.container.names} 容器页面`} />
+        <p className="modal-card__lead">页面已在宿主 WebView 窗口中打开。如果窗口没有出现，请点击「打开路由」重试；修改路由会重新打开并关闭旧窗口。</p>
       </div>
     </SettingGroup>}
     {detail && <div className="modal-backdrop"><section className="modal-card modal-card--wide">
@@ -590,7 +616,7 @@ function Networks({ networks, busy, onRun }: { networks: DockerNetwork[]; busy: 
   const [gateway, setGateway] = useState('')
   const [inspect, setInspect] = useState<{ name: string; data: unknown }>()
   const create = () => onRun('network-create', { name, driver, subnet, gateway }, () => { setName(''); setDriver(''); setSubnet(''); setGateway('') })
-  const remove = (target: string) => { if (window.confirm('删除网络 ' + target + '？正在使用中的网络会被 Docker 拒绝删除。')) onRun('network-remove', { name: target }) }
+  const remove = (target: string) => { void confirmHost('删除网络', `删除网络 ${target}？正在使用中的网络会被 Docker 拒绝删除。`, '删除', '取消').then(ok => { if (ok) onRun('network-remove', { name: target }) }) }
   const openInspect = (target: string) => onRun<unknown>('network-inspect', { name: target }, result => setInspect({ name: target, data: result.data }))
   return <div className="settings-stack">
     <SettingGroup title="新建网络" description="创建自定义 bridge 网络；子网与网关必须符合 CIDR/IP 格式。">
@@ -624,7 +650,7 @@ function Volumes({ volumes, busy, onRun }: { volumes: DockerVolume[]; busy: bool
   const [driver, setDriver] = useState('')
   const [inspect, setInspect] = useState<{ name: string; data: unknown }>()
   const create = () => onRun('volume-create', { name, driver }, () => { setName(''); setDriver('') })
-  const remove = (target: string) => { if (window.confirm('删除卷 ' + target + ' 会永久移除其数据，且无法恢复。继续吗？')) onRun('volume-remove', { name: target }) }
+  const remove = (target: string) => { void confirmHost('删除卷', `删除卷 ${target} 会永久移除其数据，且无法恢复。继续吗？`, '删除', '取消').then(ok => { if (ok) onRun('volume-remove', { name: target }) }) }
   const openInspect = (target: string) => onRun<unknown>('volume-inspect', { name: target }, result => setInspect({ name: target, data: result.data }))
   return <div className="settings-stack">
     <SettingGroup title="新建卷" description="创建命名数据卷，供 Compose 服务或容器挂载使用。">
