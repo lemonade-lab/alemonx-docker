@@ -226,6 +226,21 @@ func saveProject(id, content string) (Project, error) {
 	return Project{ProjectMeta: meta, Content: content}, nil
 }
 
+func deleteProject(id string) (actionResult, error) {
+	dir, err := projectPath(id)
+	if err != nil {
+		return actionResult{}, err
+	}
+	meta, err := readMeta(dir)
+	if err != nil {
+		return actionResult{}, err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return actionResult{}, fmt.Errorf("删除项目失败：%w", err)
+	}
+	return actionResult{Output: "✓ 已删除项目 " + meta.Name + "（仅删除受管目录中的项目文件）"}, nil
+}
+
 func writeMeta(dir string, meta ProjectMeta) error {
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {

@@ -87,6 +87,8 @@ jobs:
           mkdir -p "bundle/alemonx-docker/dist" release
           cp alx.json "bundle/alemonx-docker/alx.json"
           cp -r web "bundle/alemonx-docker/web"
+          cp recommendations.md "bundle/alemonx-docker/recommendations.md"
+          cp -r examples "bundle/alemonx-docker/examples"
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
             go build -trimpath -ldflags "-s -w" -o "bundle/alemonx-docker/dist/${{ matrix.binary }}" ./runner
           (cd bundle && zip -r "../release/${{ matrix.bundle }}" alemonx-docker)

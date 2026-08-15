@@ -39,6 +39,12 @@ export async function runActionAndPoll<T = unknown>(action: string, params: Reco
   return pollTask<T>(await runAction(action, params))
 }
 
+// runActionOnce starts a task and waits for its single result without
+// triggering any global busy/notification state; used by live polling loops.
+export async function runActionOnce<T = unknown>(action: string, params: Record<string, string> = {}): Promise<ActionResult<T>> {
+  return pollTask<T>(await runAction(action, params))
+}
+
 export async function uploadCompose(destination: string, file: File): Promise<ActionResult> {
   const data = new FormData()
   data.append('action', 'upload-compose')

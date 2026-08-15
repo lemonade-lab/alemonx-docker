@@ -2,7 +2,7 @@
   "id": "alemonx-docker",
   "name": "Docker Compose 管理器",
   "version": "0.0.1",
-  "description": "集中管理 Docker Compose 项目、镜像和容器，并检查本机 Docker 环境。",
+  "description": "管理 Docker Compose 项目、镜像、容器、网络与卷，并检查本机 Docker 环境。",
   "platforms": ["darwin", "linux", "windows"],
   "runtime": "binary",
   "entry": {
@@ -24,7 +24,7 @@
     }
   },
   "web": {"root": "web"},
-  "statusActions": ["docker-status", "project-list", "image-list", "container-list", "docker-ports"],
+  "statusActions": ["docker-status", "project-list", "image-list", "container-list", "docker-ports", "recommendations", "registry-list", "network-list", "volume-list", "external-projects"],
   "uploads": [{"action": "upload-compose", "maxBytes": 2097152}],
   "systemPickers": [
     {"id": "compose-file", "kind": "file", "title": "选择 Docker Compose 文件"},

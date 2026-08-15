@@ -48,6 +48,8 @@ dist: build web
 		mkdir -p "$$stage/dist"; \
 		cp alx.json "$$stage/alx.json"; \
 		cp -r web "$$stage/web"; \
+		cp recommendations.md "$$stage/recommendations.md"; \
+		cp -r examples "$$stage/examples"; \
 		cp "$$binary" "$$stage/dist/"; \
 		(cd "release/alemonx-docker-$$target" && zip -qr "../alemonx-docker-$$target.zip" alemonx-docker); \
 		rm -rf "release/alemonx-docker-$$target"; \
