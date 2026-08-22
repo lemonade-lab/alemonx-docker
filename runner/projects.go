@@ -41,12 +41,22 @@ type ProjectImportTarget struct {
 	Destination string      `json:"destination"`
 }
 
-func projectRoot() (string, error) {
+func legacyProjectRoot() (string, error) {
 	config, err := userConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("无法获取用户配置目录：%w", err)
 	}
 	return filepath.Join(config, "alx-docker", "projects"), nil
+}
+
+// projectRoot uses the host-provided plugin store. The old config directory
+// is copied on first use so managed Compose projects survive the transition.
+func projectRoot() (string, error) {
+	legacy, err := legacyProjectRoot()
+	if err != nil {
+		return "", err
+	}
+	return pluginStoreDir(legacy)
 }
 
 func projectPath(id string) (string, error) {

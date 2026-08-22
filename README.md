@@ -18,7 +18,11 @@
 - **模板中心**：项目页的“模板中心”tab 展示仓库内 `recommendations.md` 解析出的清单（内置示例或在线 HTTPS 地址），可一键创建为受管项目。
 - **私有仓库**：管理 `docker login` 的仓库凭据（登录/退出、已配置仓库列表）；密码经 `--password-stdin` 传输，绝不回显。
 
-项目保存在用户配置目录的 `alx-docker/projects/` 下。插件不会原地修改拖入的源文件，也不提供容器删除或任意命令终端。
+受管 Compose 项目保存在 `<workspace>/store/alemonx-docker/` 下；`<workspace>`
+由启动参数 `--workspace` 或 `ALX_WORKSPACE` 决定。这样在 Docker 中挂载工作区后，
+项目可随容器重启保留。首次使用新目录时会复制旧版用户配置中的项目，原目录不会
+被删除。`docker login` 凭据仍由 Docker 自己的配置目录管理。插件不会原地修改拖入
+的源文件，也不提供容器删除或任意命令终端。
 
 ### 安全模型
 
@@ -44,7 +48,7 @@
 
 ## 安装
 
-从 [Releases](https://github.com/lemonade-lab/alemonx-docker/releases) 下载当前平台的压缩包，解压后的 `alemonx-docker` 文件夹放入 ALemonX 插件目录即可。
+从 [Releases](https://github.com/lemonade-lab/alemonx-docker/releases) 下载当前平台的压缩包，解压后的 `alemonx-docker` 文件夹放入当前工作区的 `plugins/` 目录即可，即 `<workspace>/plugins/alemonx-docker/`。
 
 ## 开发
 
